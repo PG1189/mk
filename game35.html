@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Выбор персонажа</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: Arial, sans-serif; text-align: center; }
+        canvas { display: none; background-size: cover; }
+        #menu, #rules, #gameOverScreen {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8); color: white; padding: 20px; border-radius: 10px; font-size: 32px;
+        }
+        button {
+            font-size: 32px; padding: 15px; margin: 10px; cursor: pointer; border: none; border-radius: 10px;
+        }
+        #score, #timer {
+            position: absolute; top: 10px; color: white; font-size: 48px; font-weight: bold; text-shadow: 2px 2px 4px black;
+        }
+        #score { left: 10px; }
+        #timer { right: 10px; }
+#controls {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 20px;
+}
+
+#controls button {
+    font-size: 32px;
+    padding: 20px;
+    border: none;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    cursor: pointer;
+}
+    </style>
+</head>
+<body>
+
+    <div id="menu">
+        <h1>Выберите персонажа:</h1>
+        <button onclick="startGame('pirate')">🏴‍☠️ Пират</button>
+        <button onclick="startGame('princess')">👑 Принцесса</button>
+    </div>
+
+    <div id="rules" style="display: none;">
+        <h1>Правила игры</h1>
+        <p>Собирайте полезные предметы и избегайте огрызков (-5 очков)!</p>
+        <p id="points"></p>
+        <button onclick="hideRules()">Начать игру</button>
+    </div>
+
+    <div id="gameOverScreen" style="display: none;">
+        <h1 id="finalScore"></h1>
+        <button onclick="restartGame()">Начать заново и установить рекорд</button>
+    </div>
+
+    <div id="score">Очки: 0</div>
+    <div id="timer">Время: 30</div>
+    <canvas id="gameCanvas"></canvas>
+<div id="controls">
+    <button id="leftBtn">⬅️</button>
+    <button id="rightBtn">➡️</button>
+</div>
+    
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        let score = 0;
+        let timeLeft = 30;  // Теперь 30 секунд
+        let gameOver = false;
+        let character = null;
+
+        let pirate = { x: canvas.width / 2, y: canvas.height - 180, width: 240, height: 150, speed: 10 };
+        let items = [];
+        let keys = {};
+
+        const pirateImg = new Image();
+        const princessImg = new Image();
+        pirateImg.src = "https://imgpng.ru/d/pirate_PNG27.png";
+        princessImg.src = "https://png.pngtree.com/png-vector/20230801/ourmid/pngtree-princess-clipart-cute-pink-princess-on-white-background-cartoon-vector-png-image_6819416.png";
+
+        const itemImages = {
+            pirate: [
+                { img: "https://cdn.creazilla.com/cliparts/6268/parrot-clipart-lg.png", points: 1, name: "Попугай" },
+                { img: "https://zefirka.club/uploads/posts/2022-09/1663601122_24-zefirka-club-p-piratskii-korabl-na-prozrachnom-fone-26.png", points: 2, name: "Корабль" },
+                { img: "https://png.pngtree.com/png-clipart/20230914/original/pngtree-open-treasure-chest-vector-png-image_12160077.png", points: 3, name: "Сокровище" }
+            ],
+            princess: [
+                { img: "https://dettext.com/wp-content/uploads/2024/02/01687-dettext_com-tsvetok-risunok-dlia-detei.png", points: 1, name: "Цветок" },
+                { img: "https://flomaster.top/uploads/posts/2022-07/1657372268_2-flomaster-club-p-zamok-printsessi-risunok-krasivo-2.png", points: 2, name: "Замок" },
+                { img: "https://cdn-icons-png.flaticon.com/512/7013/7013723.png", points: 3, name: "Принц" }
+            ]
+        };
+
+        const trashImg = "https://cdn-icons-png.flaticon.com/512/12331/12331508.png";
+
+        function startGame(selectedCharacter) {
+            character = selectedCharacter;
+            document.getElementById("menu").style.display = "none";
+            document.getElementById("rules").style.display = "block";
+            canvas.style.backgroundImage = character === "pirate"
+                ? "url('https://kartinki.pics/pics/uploads/posts/2022-08/1660727047_3-kartinkin-net-p-fon-more-vektor-krasivo-3.jpg')"
+                : "url('https://oboitd.ru/images/goods/big/20200212094838_Detskie_p4060_366.jpg')";
+            document.getElementById("points").innerHTML = itemImages[character].map(item => `${item.name}: +${item.points} очк.`).join("<br>") + "<br>Огрызок: -5 очк.";
+        }
+
+        function hideRules() {
+            document.getElementById("rules").style.display = "none";
+            canvas.style.display = "block";
+            gameLoop();
+            countdown();
+            setInterval(spawnItem, 1000);  // Увеличен интервал появления предметов
+        }
+
+        function spawnItem() {
+            let type = itemImages[character][Math.floor(Math.random() * itemImages[character].length)];
+            items.push({ x: Math.random() * (canvas.width - 50), y: -50, width: 80, height: 80, speed: 2 + Math.random() * 2, img: type.img, points: type.points }); // Уменьшена скорость
+
+            if (Math.random() < 0.3) {
+                items.push({ x: Math.random() * (canvas.width - 50), y: -50, width: 70, height: 70, speed: 2 + Math.random() * 2, img: trashImg, points: -5 }); // Уменьшена скорость
+            }
+        }
+
+        function update() {
+            if (gameOver) return;
+            if (keys["ArrowLeft"] && pirate.x > 0) pirate.x -= pirate.speed;
+            if (keys["ArrowRight"] && pirate.x < canvas.width - pirate.width) pirate.x += pirate.speed;
+
+            for (let i = items.length - 1; i >= 0; i--) {
+                items[i].y += items[i].speed;
+
+                if (items[i].y + items[i].height > pirate.y && items[i].x < pirate.x + pirate.width && items[i].x + items[i].width > pirate.x) {
+                    score += items[i].points;
+                    items.splice(i, 1);
+                    document.getElementById("score").innerText = "Очки: " + score;
+                }
+
+                if (items[i] && items[i].y > canvas.height) items.splice(i, 1);
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(character === "pirate" ? pirateImg : princessImg, pirate.x, pirate.y, pirate.width, pirate.height);
+            items.forEach(item => {
+                let img = new Image();
+                img.src = item.img;
+                ctx.drawImage(img, item.x, item.y, item.width, item.height);
+            });
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            if (!gameOver) requestAnimationFrame(gameLoop);
+        }
+
+        function countdown() {
+    if (timeLeft > 0) {
+        document.getElementById("timer").innerText = "Время: " + timeLeft;
+        timeLeft--;
+        setTimeout(countdown, 1000);
+    } else {
+        gameOver = true;
+        document.getElementById("gameOverScreen").style.display = "block";
+        document.getElementById("finalScore").innerText = `Поздравляем, ваш счёт: ${score}`;
+    }
+}
+
+        function restartGame() { location.reload(); }
+document.getElementById("leftBtn").addEventListener("mousedown", () => keys["ArrowLeft"] = true);
+document.getElementById("leftBtn").addEventListener("mouseup", () => keys["ArrowLeft"] = false);
+document.getElementById("rightBtn").addEventListener("mousedown", () => keys["ArrowRight"] = true);
+document.getElementById("rightBtn").addEventListener("mouseup", () => keys["ArrowRight"] = false);
+        window.addEventListener("keydown", e => keys[e.key] = true);
+        window.addEventListener("keyup", e => keys[e.key] = false);
+    </script>
+</body>
+</html>
